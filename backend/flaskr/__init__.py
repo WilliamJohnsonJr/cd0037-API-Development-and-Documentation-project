@@ -56,7 +56,7 @@ def create_app(test_config=None):
     """
     @app.route('/questions')
     def get_questions():
-        page = request.args.get('page', type=int)
+        page = request.args.get('page', type=int) or 1
         res = Question.query.order_by(Question.id).all()
         count = Question.query.count()
         questions = [question.format() for question in res]
@@ -64,7 +64,7 @@ def create_app(test_config=None):
         categories = Category.query.filter(Category.id.in_(categories_ids)).order_by(Category.id).all()
         categories = [category.format() for category in categories]
         start = (page - 1) * QUESTIONS_PER_PAGE
-        end = page * QUESTIONS_PER_PAGE - 1
+        end = start + QUESTIONS_PER_PAGE
         questions = questions[start:end]
         if len(questions) == 0:
             abort(404)
@@ -88,7 +88,13 @@ def create_app(test_config=None):
     TEST: When you click the trash icon next to a question, the question will be removed.
     This removal will persist in the database and when you refresh the page.
     """
+    @app.route('/questions/<int:question_id>', methods=['DELETE'])
+    def delete_question(question_id):
+        question: Question = Question.query.filter(Question.id == question_id).first_or_404()
+        id = question.id
+        question.delete()
 
+        return jsonify({'success': True, 'id': id})
     """
     @TODO:
     Create an endpoint to POST a new question,
