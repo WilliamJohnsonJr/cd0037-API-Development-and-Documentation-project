@@ -1,7 +1,6 @@
 from flask import Flask, request, abort, jsonify
 from flask_cors import CORS
 import random
-
 from models import setup_db, Question, Category, db
 
 QUESTIONS_PER_PAGE = 10
@@ -17,14 +16,14 @@ def create_app(test_config=None):
         setup_db(app, database_path=database_path)
 
     """
-    @TODO - X: Set up CORS. Allow '*' for origins. Delete the sample route after completing the TODOs
+    Set up CORS. Allow '*' for origins. Delete the sample route after completing the TODOs
     """
-    CORS(app, origins=['*'], resources=[r'/api/*'])
+    CORS(app, origins=['*'])
     with app.app_context():
         db.create_all()
 
     """
-    @TODO - X: Use the after_request decorator to set Access-Control-Allow
+    Use the after_request decorator to set Access-Control-Allow
     """
     @app.after_request
     def after_request(response):
@@ -33,7 +32,6 @@ def create_app(test_config=None):
         return response
 
     """
-    @TODO:
     Create an endpoint to handle GET requests
     for all available categories.
     """
@@ -46,17 +44,42 @@ def create_app(test_config=None):
         return jsonify({'success': True, 'categories': categories})
 
     """
-    @TODO:
     Create an endpoint to handle GET requests for questions,
     including pagination (every 10 questions).
     This endpoint should return a list of questions,
     number of total questions, current category, categories.
-
+    
     TEST: At this point, when you start the application
     you should see questions and categories generated,
     ten questions per page and pagination at the bottom of the screen for three pages.
     Clicking on the page numbers should update the questions.
     """
+    @app.route('/questions')
+    def get_questions():
+        page = request.args.get('page', type=int)
+        res = Question.query.order_by(Question.id).all()
+        count = Question.query.count()
+        questions = [question.format() for question in res]
+        categories_ids = sorted(list(set([question['category'] for question in questions])))
+        categories = Category.query.filter(Category.id.in_(categories_ids)).order_by(Category.id).all()
+        categories = [category.format() for category in categories]
+        start = (page - 1) * QUESTIONS_PER_PAGE
+        end = page * QUESTIONS_PER_PAGE - 1
+        questions = questions[start:end]
+        if len(questions) == 0:
+            abort(404)
+        current_category = [category for category in categories if category['id'] == questions[0]['category']]
+        
+        current_category = current_category[0]
+        return jsonify(
+            {
+                "success": True,
+                "questions": questions,
+                "total_questions": count,
+                "categories": {category['id']: category['type'] for category in categories},
+                "current_category": current_category,
+            }
+        )
 
     """
     @TODO:
@@ -119,4 +142,3 @@ def create_app(test_config=None):
         return jsonify({'success': False, 'error': 'Not Found'}), 404
 
     return app
-
