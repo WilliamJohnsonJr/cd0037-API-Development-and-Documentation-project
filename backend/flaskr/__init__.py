@@ -12,36 +12,42 @@ def create_app(test_config=None):
     if test_config is None:
         setup_db(app)
     else:
-        database_path = test_config.get('SQLALCHEMY_DATABASE_URI')
+        database_path = test_config.get("SQLALCHEMY_DATABASE_URI")
         setup_db(app, database_path=database_path)
 
     """
     Set up CORS. Allow '*' for origins. Delete the sample route after completing the TODOs
     """
-    CORS(app, origins=['*'])
+    CORS(app, origins=["*"])
     with app.app_context():
         db.create_all()
 
     """
     Use the after_request decorator to set Access-Control-Allow
     """
+
     @app.after_request
     def after_request(response):
-        response.headers.add('Access-Control-Allow-Headers', 'Content-Type, Authorization')
-        response.headers.add('Access-Control-Allow-Headers', 'OPTIONS, GET, POST, PATCH, DELETE')
+        response.headers.add(
+            "Access-Control-Allow-Headers", "Content-Type, Authorization"
+        )
+        response.headers.add(
+            "Access-Control-Allow-Headers", "OPTIONS, GET, POST, PATCH, DELETE"
+        )
         return response
 
     """
     Create an endpoint to handle GET requests
     for all available categories.
     """
-    @app.route('/categories')
+
+    @app.route("/categories")
     def get_categories():
         res = Category.query.order_by(Category.type).all()
         categories = [category.format() for category in res]
         if len(categories) == 0:
             return abort(404)
-        return jsonify({'success': True, 'categories': categories})
+        return jsonify({"success": True, "categories": categories})
 
     """
     Create an endpoint to handle GET requests for questions,
@@ -54,35 +60,76 @@ def create_app(test_config=None):
     ten questions per page and pagination at the bottom of the screen for three pages.
     Clicking on the page numbers should update the questions.
     """
-    @app.route('/questions')
+
+    @app.route("/questions", methods=["GET", "POST"])
     def get_questions():
-        page = request.args.get('page', type=int) or 1
-        res = Question.query.order_by(Question.id).all()
-        count = Question.query.count()
-        questions = [question.format() for question in res]
-        categories_ids = sorted(list(set([question['category'] for question in questions])))
-        categories = Category.query.filter(Category.id.in_(categories_ids)).order_by(Category.id).all()
-        categories = [category.format() for category in categories]
-        start = (page - 1) * QUESTIONS_PER_PAGE
-        end = start + QUESTIONS_PER_PAGE
-        questions = questions[start:end]
-        if len(questions) == 0:
-            abort(404)
-        current_category = [category for category in categories if category['id'] == questions[0]['category']]
-        
-        current_category = current_category[0]
-        return jsonify(
-            {
-                "success": True,
-                "questions": questions,
-                "total_questions": count,
-                "categories": {category['id']: category['type'] for category in categories},
-                "current_category": current_category,
-            }
-        )
+        if request.method == "GET":
+            page = request.args.get("page", type=int) or 1
+            res = Question.query.order_by(Question.id).all()
+            count = Question.query.count()
+            questions = [question.format() for question in res]
+            categories_ids = sorted(
+                list(set([question["category"] for question in questions]))
+            )
+            categories = (
+                Category.query.filter(Category.id.in_(categories_ids))
+                .order_by(Category.id)
+                .all()
+            )
+            categories = [category.format() for category in categories]
+            start = (page - 1) * QUESTIONS_PER_PAGE
+            end = start + QUESTIONS_PER_PAGE
+            questions = questions[start:end]
+            if len(questions) == 0:
+                abort(404)
+            current_category = [
+                category
+                for category in categories
+                if category["id"] == questions[0]["category"]
+            ]
+
+            current_category = current_category[0]
+            return jsonify(
+                {
+                    "success": True,
+                    "questions": questions,
+                    "total_questions": count,
+                    "categories": {
+                        category["id"]: category["type"] for category in categories
+                    },
+                    "current_category": current_category,
+                }
+            )
+        if request.method == "POST":
+            """
+            Create an endpoint to POST a new question,
+            which will require the question and answer text,
+            category, and difficulty score.
+
+            TEST: When you submit a question on the "Add" tab,
+            the form will clear and the question will appear at the end of the last page
+            of the questions list in the "List" tab.
+            """
+            body = request.get_json()
+            if not (
+                isinstance(body.get('answer'), str) 
+                and isinstance(body.get('category'), int) 
+                and isinstance(body.get('difficulty'), int) 
+                and isinstance(body.get('question'), str)
+            ):
+                abort(400)
+
+            question = Question(
+                answer=body.get("answer"),
+                category=body.get("category"),
+                difficulty=body.get("difficulty"),
+                question=body.get("question"),
+            )
+            question.insert()
+            return jsonify({"success": True, "question": question.format()}), 201
+        abort(405)
 
     """
-    @TODO:
     Create an endpoint to DELETE question using a question ID.
 
     TEST: When you click the trash icon next to a question, the question will be removed.
@@ -95,16 +142,6 @@ def create_app(test_config=None):
         question.delete()
 
         return jsonify({'success': True, 'id': id})
-    """
-    @TODO:
-    Create an endpoint to POST a new question,
-    which will require the question and answer text,
-    category, and difficulty score.
-
-    TEST: When you submit a question on the "Add" tab,
-    the form will clear and the question will appear at the end of the last page
-    of the questions list in the "List" tab.
-    """
 
     """
     @TODO:
@@ -143,8 +180,16 @@ def create_app(test_config=None):
     Create error handlers for all expected errors
     including 404 and 422.
     """
+    @app.errorhandler(400)
+    def bad_request(error):
+        return jsonify({"success": False, "error": "Bad Request"}), 400
+
     @app.errorhandler(404)
     def not_found(error):
-        return jsonify({'success': False, 'error': 'Not Found'}), 404
+        return jsonify({"success": False, "error": "Not Found"}), 404
+
+    @app.errorhandler(405)
+    def not_allowed(error):
+        return jsonify({"success": False, "error": "Method Not Allowed"}), 405
 
     return app

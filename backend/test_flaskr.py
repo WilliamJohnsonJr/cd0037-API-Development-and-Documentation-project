@@ -3,6 +3,8 @@ import unittest
 
 import json
 
+from sqlalchemy import text
+
 from flaskr import create_app
 from models import db, Question, Category
 
@@ -36,10 +38,8 @@ class TriviaTestCase(unittest.TestCase):
         """Executed after each test"""
         with self.app.app_context():
             db.session.remove()
-            db.drop_all()
 
     """
-    TODO
     Write at least one test for each test for successful operation and for expected errors.
     """
 
@@ -93,15 +93,91 @@ class TriviaTestCase(unittest.TestCase):
             },
         )
 
+    def test_get_questions_error(self):
+        res = self.client.get("/questions?page=200")
+        data = json.loads(res.data)
+
+        self.assertEqual(res.status_code, 404)
+        self.assertDictEqual(data, {"error": "Not Found", "success": False})
+
     def test_delete_question(self):
         res = self.client.delete('/questions/2')
         data = json.loads(res.data)
+        with self.app.app_context():
+            question_or_none = Question.query.filter(Question.id == 2).one_or_none()
+            self.assertEqual(res.status_code, 200)
+            self.assertEqual(data['success'], True)
+            self.assertEqual(data['id'], 2)
+            self.assertEqual(question_or_none, None)
 
-        self.assertEqual(res.status_code, 200)
-        self.assertEqual(data['success'], True)
-        self.assertEqual(data['id'], 2)
-        self.assertRaises(Question.query.filter(Question.id == 2).first_or_404())
+            # Clean up db
+            question = Question(
+                answer="Apollo 13",
+                category=5,
+                difficulty=4,
+                question="What movie earned Tom Hanks his third straight Oscar nomination, in 1996?",
+            )
+            question.id = 2
+            question.insert()
 
+    def test_delete_question_error(self):
+        res = self.client.delete('/questions/200')
+        data = json.loads(res.data)
+
+        self.assertEqual(res.status_code, 404)
+        self.assertEqual(data['success'], False)
+        self.assertEqual(data['error'], 'Not Found')
+
+    def test_create_question(self):
+        new_question = {
+            "answer": "Lake Superior",
+            "category": 3,
+            "difficulty": 3,
+            "question": "What is the largest freshwater lake in the world by surface area?",
+        }
+        res = self.client.post('/questions', json=new_question)
+        data = json.loads(res.data)
+
+        self.assertEqual(res.status_code, 201)
+        self.assertTrue(isinstance(data['question']['id'], int))
+        self.assertEqual(data['question']['answer'], "Lake Superior")
+
+        # Clean up db
+        with self.app.app_context():
+            question_to_remove = Question.query.filter(Question.id == data['question']['id']).one_or_none()
+            if(question_to_remove):
+                question_to_remove.delete()
+
+    def test_create_question_400(self):
+        # Fails, since category must be an int
+        new_question = {
+            "answer": "Lake Superior",
+            "category": "McIntosh", 
+            "difficulty": 3,
+            "question": "What is the largest freshwater lake in the world by surface area?",
+        }
+
+        res = self.client.post('/questions', json=new_question)
+        data = json.loads(res.data)
+
+        self.assertEqual(res.status_code, 400)
+        self.assertEqual(data, {'success': False, "error": "Bad Request"})
+
+    def test_create_question_405(self):
+        # Fails, since category must be an int
+        new_question = {
+            "answer": "Lake Superior",
+            "category": 3, 
+            "difficulty": 3,
+            "question": "What is the largest freshwater lake in the world by surface area?",
+        }
+
+        res = self.client.patch('/questions', json=new_question)
+        print(res.data)
+        data = json.loads(res.data)
+
+        self.assertEqual(res.status_code, 405)
+        self.assertEqual(data, {'success': False, "error": "Method Not Allowed"})
 
 # Make the tests conveniently executable
 if __name__ == "__main__":
