@@ -19,8 +19,6 @@ def create_app(test_config=None):
     Set up CORS. Allow '*' for origins. Delete the sample route after completing the TODOs
     """
     CORS(app, origins=["*"])
-    with app.app_context():
-        db.create_all()
 
     """
     Use the after_request decorator to set Access-Control-Allow
@@ -68,12 +66,8 @@ def create_app(test_config=None):
             res = Question.query.order_by(Question.id).all()
             count = Question.query.count()
             questions = [question.format() for question in res]
-            categories_ids = sorted(
-                list(set([question["category"] for question in questions]))
-            )
             categories = (
-                Category.query.filter(Category.id.in_(categories_ids))
-                .order_by(Category.id)
+                Category.query.order_by(Category.id)
                 .all()
             )
             categories = [category.format() for category in categories]
@@ -110,6 +104,8 @@ def create_app(test_config=None):
             the form will clear and the question will appear at the end of the last page
             of the questions list in the "List" tab.
             """
+            if request.content_type != "application/json":
+                abort(415)
             body = request.get_json()
             if not (
                 isinstance(body.get('answer'), str) 
@@ -146,7 +142,6 @@ def create_app(test_config=None):
         return jsonify({"success": True, "id": id})
 
     """
-    @TODO:
     Create a POST endpoint to get questions based on a search term.
     It should return any questions for whom the search term
     is a substring of the question.
@@ -157,6 +152,8 @@ def create_app(test_config=None):
     """
     @app.route("/questions/search", methods=["POST"])
     def lookup_question():
+        if request.content_type != "application/json":
+            abort(415)
         body = request.get_json()
         search_term = body.get("searchTerm", None)
         if not isinstance(body.get("searchTerm"), str):
@@ -168,9 +165,12 @@ def create_app(test_config=None):
             .all()
         )
         count = Question.query.count()
-        current_category = Category.query.filter(
-            Category.id == questions[0].category
-        ).one_or_404()
+        if(len(questions) > 0):
+            current_category = Category.query.filter(
+                Category.id == questions[0].category
+            ).one_or_404()
+        else:
+            abort(404)
 
         return (
             jsonify(
@@ -185,16 +185,27 @@ def create_app(test_config=None):
         )
 
     """
-    @TODO:
     Create a GET endpoint to get questions based on category.
 
     TEST: In the "List" tab / main screen, clicking on one of the
     categories in the left column will cause only questions of that
     category to be shown.
     """
+    @app.route("/categories/<int:category_id>/questions")
+    def get_questions_by_category(category_id: int):
+        category = Category.query.filter(Category.id == category_id).first_or_404()
+        current_category = category
+        count = Question.query.count()
+        questions = Question.query.filter(Question.category == category_id).order_by(Question.id).all()
+
+        return jsonify({
+            "success": True,
+            "total_questions": count,
+            "questions": [question.format() for question in questions],
+            "current_category": current_category.format(),
+        }), 200
 
     """
-    @TODO:
     Create a POST endpoint to get questions to play the quiz.
     This endpoint should take category and previous question parameters
     and return a random questions within the given category,
@@ -204,9 +215,28 @@ def create_app(test_config=None):
     one question at a time is displayed, the user is allowed to answer
     and shown whether they were correct or not.
     """
+    @app.route("/quizzes", methods=["POST"])
+    def lookup_quiz_question():
+        if request.content_type != "application/json":
+            abort(415)
+        body = request.get_json()
+
+        quiz_category = body.get("quiz_category", None)
+        previous_questions = body.get("previous_questions", [])
+
+        questions = Question.query.filter(Question.id.not_in(previous_questions)).all()
+        if quiz_category:
+            if Category.query.filter(Category.id == quiz_category["id"]).count() < 1:
+                abort(404)
+            questions = [question for question in questions if question.category == quiz_category["id"]]
+
+        question = None
+        if len(questions) > 0:
+            question = random.choice([question.format() for question in questions])
+
+        return jsonify({"success": True, "question": question}), 200
 
     """
-    @TODO:
     Create error handlers for all expected errors
     including 404 and 422.
     """
@@ -221,5 +251,13 @@ def create_app(test_config=None):
     @app.errorhandler(405)
     def not_allowed(error):
         return jsonify({"success": False, "error": "Method Not Allowed"}), 405
+    
+    @app.errorhandler(415)
+    def unsupported_media_type(error):
+        return jsonify({"success": False, "error": "Unsupported Media Type"}), 415
+    
+    @app.errorhandler(500)
+    def internal_server_error(error):
+        return jsonify({"success": False, "error": "Internal Server Error"}), 500
 
     return app

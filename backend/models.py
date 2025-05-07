@@ -16,6 +16,8 @@ def setup_db(app, database_path=database_path):
     app.config['SQLALCHEMY_DATABASE_URI'] = database_path
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     db.init_app(app)
+    with app.app_context():
+        db.create_all()
 
 """
 Question
@@ -66,6 +68,14 @@ class Category(db.Model):
 
     def __init__(self, type):
         self.type = type
+
+    def insert(self):
+        db.session.add(self)
+        db.session.commit()
+
+    def delete(self):
+        db.session.delete(self)
+        db.session.commit()
 
     def format(self):
         return {
