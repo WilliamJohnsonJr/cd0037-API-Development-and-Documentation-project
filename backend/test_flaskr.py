@@ -308,6 +308,25 @@ class TriviaTestCase(unittest.TestCase):
         self.assertEqual(data["error"], "Not Found")
 
     def test_lookup_quiz_question(self):
+        payload={"previous_questions": [20, 21], "quiz_category": {"id": 1, "type": "Science"}}
+        res = self.client.post("/quizzes", json=payload, content_type="application/json")
+        data = json.loads(res.data)
+
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(
+            data,
+            {
+                "question": {
+                    "answer": "Blood",
+                    "category": 1,
+                    "difficulty": 4,
+                    "id": 22,
+                    "question": "Hematology is a branch of medicine involving the "
+                    "study of what?",
+                },
+                "success": True,
+            },
+        )
 
     def test_lookup_quiz_question_415(self):
         payload = 0b10101010
