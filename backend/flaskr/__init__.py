@@ -104,8 +104,6 @@ def create_app(test_config=None):
             the form will clear and the question will appear at the end of the last page
             of the questions list in the "List" tab.
             """
-            if request.content_type != "application/json":
-                abort(415)
             body = request.get_json()
             if not (
                 isinstance(body.get('answer'), str) 
@@ -152,12 +150,10 @@ def create_app(test_config=None):
     """
     @app.route("/questions/search", methods=["POST"])
     def lookup_question():
-        if request.content_type != "application/json":
-            abort(415)
         body = request.get_json()
-        search_term = body.get("searchTerm", None)
-        if not isinstance(body.get("searchTerm"), str):
+        if not body or not isinstance(body.get("searchTerm", None), str):
             abort(400)
+        search_term = body.get("searchTerm")
         search_term = f"%{search_term}%"
         questions = (
             Question.query.filter(Question.question.ilike(search_term))
@@ -217,12 +213,16 @@ def create_app(test_config=None):
     """
     @app.route("/quizzes", methods=["POST"])
     def lookup_quiz_question():
-        if request.content_type != "application/json":
-            abort(415)
         body = request.get_json()
+        if (
+            not body
+            or not isinstance(body.get("quiz_category", None), dict)
+            or not isinstance(body.get("previous_questions", None), list)
+        ):
+            abort(400)
 
-        quiz_category = body.get("quiz_category", None)
-        previous_questions = body.get("previous_questions", [])
+        quiz_category = body.get("quiz_category")
+        previous_questions = body.get("previous_questions")
 
         questions = Question.query.filter(Question.id.not_in(previous_questions)).all()
         if quiz_category:
@@ -251,11 +251,11 @@ def create_app(test_config=None):
     @app.errorhandler(405)
     def not_allowed(error):
         return jsonify({"success": False, "error": "Method Not Allowed"}), 405
-    
+
     @app.errorhandler(415)
     def unsupported_media_type(error):
         return jsonify({"success": False, "error": "Unsupported Media Type"}), 415
-    
+
     @app.errorhandler(500)
     def internal_server_error(error):
         return jsonify({"success": False, "error": "Internal Server Error"}), 500

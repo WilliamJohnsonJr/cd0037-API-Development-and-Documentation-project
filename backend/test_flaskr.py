@@ -153,15 +153,6 @@ class TriviaTestCase(unittest.TestCase):
         self.assertTrue(isinstance(data["question"]["id"], int))
         self.assertEqual(data["question"]["answer"], "Lake Superior")
 
-    def test_create_question_415(self):
-        new_question = 0b10101010
-        res = self.client.post("/questions", data=bytes(new_question), content_type='application/octet-stream')
-        data = json.loads(res.data)
-
-        self.assertEqual(res.status_code, 415)
-        self.assertFalse(data["success"])
-        self.assertEqual(data["error"], "Unsupported Media Type")
-
     def test_create_question_400(self):
         # Fails, since category must be an int
         new_question = {
@@ -176,6 +167,15 @@ class TriviaTestCase(unittest.TestCase):
 
         self.assertEqual(res.status_code, 400)
         self.assertEqual(data, {"success": False, "error": "Bad Request"})
+
+    def test_create_question_non_json_400(self):
+        payload = 0b10101010
+        res = self.client.post("/questions", data=bytes(payload), content_type='application/json')
+        data = json.loads(res.data)
+
+        self.assertEqual(res.status_code, 400)
+        self.assertFalse(data["success"])
+        self.assertEqual(data["error"], "Bad Request")
 
     def test_create_question_405(self):
         # Fails, since category must be an int
@@ -192,7 +192,16 @@ class TriviaTestCase(unittest.TestCase):
         self.assertEqual(res.status_code, 405)
         self.assertEqual(data, {"success": False, "error": "Method Not Allowed"})
 
-    def test_search_questions(self):
+    def test_create_question_415(self):
+        new_question = 0b10101010
+        res = self.client.post("/questions", data=bytes(new_question), content_type='application/octet-stream')
+        data = json.loads(res.data)
+
+        self.assertEqual(res.status_code, 415)
+        self.assertFalse(data["success"])
+        self.assertEqual(data["error"], "Unsupported Media Type")
+
+    def test_lookup_questions(self):
         payload = {"searchTerm": "title"}
         res = self.client.post("/questions/search", json=payload)
         data = json.loads(res.data)
@@ -221,7 +230,16 @@ class TriviaTestCase(unittest.TestCase):
         self.assertEqual(data["total_questions"], 19)
         self.assertEqual(data["current_category"], {"id": 4, "type": "History"})
 
-    def test_search_questions_404(self):
+    def test_lookup_questions_non_json_400(self):
+        payload = 0b10101010
+        res = self.client.post("/questions/search", data=bytes(payload), content_type='application/json')
+        data = json.loads(res.data)
+
+        self.assertEqual(res.status_code, 400)
+        self.assertFalse(data["success"])
+        self.assertEqual(data["error"], "Bad Request")
+
+    def test_lookup_questions_404(self):
         payload = {"searchTerm": "rutabaga"}
         res = self.client.post("/questions/search", json=payload)
         data = json.loads(res.data)
@@ -230,7 +248,7 @@ class TriviaTestCase(unittest.TestCase):
         self.assertFalse(data["success"])
         self.assertEqual(data["error"], "Not Found")
 
-    def test_search_questions_no_category_404(self):
+    def test_lookup_questions_no_category_404(self):
         payload = {"searchTerm": "rutabaga"}
 
         with self.app.app_context():
@@ -255,7 +273,7 @@ class TriviaTestCase(unittest.TestCase):
             self.assertFalse(data["success"])
             self.assertEqual(data["error"], "Not Found")
 
-    def test_search_questions_415(self):
+    def test_lookup_questions_415(self):
         payload = 0b10101010
         res = self.client.post("/questions/search", data=bytes(payload), content_type='application/octet-stream')
         data = json.loads(res.data)
@@ -327,6 +345,24 @@ class TriviaTestCase(unittest.TestCase):
                 "success": True,
             },
         )
+
+    def test_lookup_quiz_question_non_json_400(self):
+        payload = 0b10101010
+        res = self.client.post("/quizzes", data=bytes(payload), content_type='application/json')
+        data = json.loads(res.data)
+
+        self.assertEqual(res.status_code, 400)
+        self.assertFalse(data["success"])
+        self.assertEqual(data["error"], "Bad Request")
+
+    def test_lookup_quiz_question_400(self):
+        payload = {"cookies": "yum"}
+        res = self.client.post("/quizzes", data=payload, content_type='application/json')
+        data = json.loads(res.data)
+
+        self.assertEqual(res.status_code, 400)
+        self.assertFalse(data["success"])
+        self.assertEqual(data["error"], "Bad Request")
 
     def test_lookup_quiz_question_415(self):
         payload = 0b10101010
