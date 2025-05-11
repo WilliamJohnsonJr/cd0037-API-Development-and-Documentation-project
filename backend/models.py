@@ -1,8 +1,16 @@
 from sqlalchemy import Column, String, Integer
 from flask_sqlalchemy import SQLAlchemy
+import json
+
+json_env_file_path = '.env.json'
+
+# Open the JSON file and load its content
+with open(json_env_file_path, 'r') as file:
+    data = json.load(file)
+
 database_name = 'trivia'
-database_user = 'postgres'
-database_password = 'password'
+database_user = data['db_user']
+database_password = data['db_password']
 database_host = 'localhost:5432'
 database_path = f'postgresql://{database_user}:{database_password}@{database_host}/{database_name}'
 

@@ -9,6 +9,14 @@ from flaskr import create_app
 from models import db, Question, Category
 from seed_test_db import make_categories, make_questions
 
+import json
+
+json_env_file_path = '.env.json'
+
+# Open the JSON file and load its content
+with open(json_env_file_path, 'r') as file:
+    data = json.load(file)
+
 
 class TriviaTestCase(unittest.TestCase):
     """This class represents the trivia test case"""
@@ -16,8 +24,8 @@ class TriviaTestCase(unittest.TestCase):
     def setUp(self):
         """Define test variables and initialize app."""
         self.database_name = "trivia_test"
-        self.database_user = "postgres"
-        self.database_password = "password"
+        self.database_user = data["db_user"]
+        self.database_password = data["db_password"]
         self.database_host = "localhost:5432"
         self.database_path = f"postgresql://{self.database_user}:{self.database_password}@{self.database_host}/{self.database_name}"
         self.engine = create_engine(self.database_path)
@@ -77,7 +85,7 @@ class TriviaTestCase(unittest.TestCase):
             ],
         )
 
-        self.assertEqual(len(list(data["categories"].keys())), 6)
+        self.assertEqual(len(data["categories"]), 6)
         self.assertDictEqual(
             data["current_category"], {"id": 5, "type": "Entertainment"}
         )
@@ -96,7 +104,7 @@ class TriviaTestCase(unittest.TestCase):
         questions = data["questions"]
 
         self.assertEqual(res.status_code, 200)
-        self.assertEqual(len(list(data["categories"].keys())), 6)
+        self.assertEqual(len(data["categories"]), 6)
         self.assertLessEqual(len(data["questions"]), 9)
         self.assertGreaterEqual(data["total_questions"], 18)
         self.assertEqual(
@@ -114,12 +122,21 @@ class TriviaTestCase(unittest.TestCase):
             },
         )
 
-    def test_get_questions_error(self):
+    def test_get_questions_404(self):
         res = self.client.get("/questions?page=200")
         data = json.loads(res.data)
 
         self.assertEqual(res.status_code, 404)
         self.assertDictEqual(data, {"error": "Not Found", "success": False})
+
+    def test_get_questions_bad_query_param_type_200(self):
+        # ignore improper query params and return a default of 1 for page
+        res = self.client.get("/questions?page=sizzle")
+        data = json.loads(res.data)
+
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(len(data["categories"]), 6)
+        self.assertLessEqual(len(data["questions"]), 10)
 
     def test_delete_question(self):
         res = self.client.delete("/questions/2")
@@ -168,6 +185,21 @@ class TriviaTestCase(unittest.TestCase):
         self.assertEqual(res.status_code, 400)
         self.assertEqual(data, {"success": False, "error": "Bad Request"})
 
+    def test_create_question_bad_category_400(self):
+            # Fails, since category must be an int
+            new_question = {
+                "answer": "Lake Superior",
+                "category": 399,
+                "difficulty": 3,
+                "question": "What is the largest freshwater lake in the world by surface area?",
+            }
+
+            res = self.client.post("/questions", json=new_question)
+            data = json.loads(res.data)
+
+            self.assertEqual(res.status_code, 400)
+            self.assertEqual(data, {"success": False, "error": "Bad Request"})
+
     def test_create_question_non_json_400(self):
         payload = 0b10101010
         res = self.client.post("/questions", data=bytes(payload), content_type='application/json')
@@ -202,7 +234,7 @@ class TriviaTestCase(unittest.TestCase):
         self.assertEqual(data["error"], "Unsupported Media Type")
 
     def test_lookup_questions(self):
-        payload = {"searchTerm": "title"}
+        payload = {"search_term": "title"}
         res = self.client.post("/questions/search", json=payload)
         data = json.loads(res.data)
 
@@ -227,7 +259,7 @@ class TriviaTestCase(unittest.TestCase):
                 },
             ],
         )
-        self.assertEqual(data["total_questions"], 19)
+        self.assertEqual(data["total_questions"], 2)
         self.assertEqual(data["current_category"], {"id": 4, "type": "History"})
 
     def test_lookup_questions_non_json_400(self):
@@ -240,7 +272,7 @@ class TriviaTestCase(unittest.TestCase):
         self.assertEqual(data["error"], "Bad Request")
 
     def test_lookup_questions_404(self):
-        payload = {"searchTerm": "rutabaga"}
+        payload = {"search_term": "rutabaga"}
         res = self.client.post("/questions/search", json=payload)
         data = json.loads(res.data)
 
@@ -249,7 +281,7 @@ class TriviaTestCase(unittest.TestCase):
         self.assertEqual(data["error"], "Not Found")
 
     def test_lookup_questions_no_category_404(self):
-        payload = {"searchTerm": "rutabaga"}
+        payload = {"search_term": "rutabaga"}
 
         with self.app.app_context():
             # question_id = 0
@@ -314,10 +346,10 @@ class TriviaTestCase(unittest.TestCase):
                 },
             ],
         )
-        self.assertEqual(data["total_questions"], 19)
+        self.assertEqual(data["total_questions"], 3)
         self.assertEqual(data["current_category"], {"id": 3, "type": "Geography"})
 
-    def test_get_questions_by_category_404(self):
+    def test_get_questions_by_category_no_category_404(self):
         res = self.client.get("/categories/399/questions")
         data = json.loads(res.data)
 
@@ -325,8 +357,20 @@ class TriviaTestCase(unittest.TestCase):
         self.assertEqual(data["success"], False)
         self.assertEqual(data["error"], "Not Found")
 
+    def test_get_questions_by_category_no_questions_404(self):
+        with self.app.app_context():
+            questions = Question.query.filter(Question.category == Category.id).all()
+            for question in questions:
+                question.delete()
+            res = self.client.get("/categories/1/questions")
+            data = json.loads(res.data)
+
+            self.assertEqual(res.status_code, 404)
+            self.assertEqual(data["success"], False)
+            self.assertEqual(data["error"], "Not Found")
+
     def test_lookup_quiz_question(self):
-        payload={"previous_questions": [20, 21], "quiz_category": {"id": 1, "type": "Science"}}
+        payload={"previous_questions": [20, 21], "quiz_category": 1}
         res = self.client.post("/quizzes", json=payload, content_type="application/json")
         data = json.loads(res.data)
 
@@ -357,6 +401,15 @@ class TriviaTestCase(unittest.TestCase):
 
     def test_lookup_quiz_question_400(self):
         payload = {"cookies": "yum"}
+        res = self.client.post("/quizzes", data=payload, content_type='application/json')
+        data = json.loads(res.data)
+
+        self.assertEqual(res.status_code, 400)
+        self.assertFalse(data["success"])
+        self.assertEqual(data["error"], "Bad Request")
+
+    def test_lookup_quiz_question_bad_category_400(self):
+        payload = {"previous_questions": [], "quiz_category": 199}
         res = self.client.post("/quizzes", data=payload, content_type='application/json')
         data = json.loads(res.data)
 

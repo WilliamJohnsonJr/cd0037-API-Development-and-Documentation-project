@@ -62,7 +62,7 @@ def create_app(test_config=None):
     @app.route("/questions", methods=["GET", "POST"])
     def get_questions():
         if request.method == "GET":
-            page = request.args.get("page", type=int) or 1
+            page = request.args.get("page", 1, type=int)
             res = Question.query.order_by(Question.id).all()
             count = Question.query.count()
             questions = [question.format() for question in res]
@@ -88,9 +88,7 @@ def create_app(test_config=None):
                     "success": True,
                     "questions": questions,
                     "total_questions": count,
-                    "categories": {
-                        category["id"]: category["type"] for category in categories
-                    },
+                    "categories": [category for category in categories],
                     "current_category": current_category,
                 }
             )
@@ -119,6 +117,8 @@ def create_app(test_config=None):
                 difficulty=body.get("difficulty"),
                 question=body.get("question"),
             )
+            if Category.query.filter(Category.id == question.category).count() == 0:
+                abort(400)
             question.insert()
             return jsonify({"success": True, "question": question.format()}), 201
         abort(405)
@@ -131,6 +131,8 @@ def create_app(test_config=None):
     """
     @app.route("/questions/<int:question_id>", methods=["DELETE"])
     def delete_question(question_id):
+        if not isinstance(question_id, int):
+            abort(400)
         question: Question = Question.query.filter(
             Question.id == question_id
         ).first_or_404()
@@ -151,22 +153,21 @@ def create_app(test_config=None):
     @app.route("/questions/search", methods=["POST"])
     def lookup_question():
         body = request.get_json()
-        if not body or not isinstance(body.get("searchTerm", None), str):
+        if not body or not isinstance(body.get("search_term", None), str):
             abort(400)
-        search_term = body.get("searchTerm")
+        search_term = body.get("search_term")
         search_term = f"%{search_term}%"
         questions = (
             Question.query.filter(Question.question.ilike(search_term))
             .order_by(Question.id)
             .all()
         )
-        count = Question.query.count()
-        if(len(questions) > 0):
-            current_category = Category.query.filter(
-                Category.id == questions[0].category
-            ).one_or_404()
-        else:
+        count = len(questions)
+        if(count == 0):
             abort(404)
+        current_category = Category.query.filter(
+            Category.id == questions[0].category
+        ).one_or_404()
 
         return (
             jsonify(
@@ -191,9 +192,10 @@ def create_app(test_config=None):
     def get_questions_by_category(category_id: int):
         category = Category.query.filter(Category.id == category_id).first_or_404()
         current_category = category
-        count = Question.query.count()
+        count = Question.query.filter(Question.category == category_id).count()
         questions = Question.query.filter(Question.category == category_id).order_by(Question.id).all()
-
+        if len(questions) == 0:
+            abort(404)
         return jsonify({
             "success": True,
             "total_questions": count,
@@ -216,7 +218,7 @@ def create_app(test_config=None):
         body = request.get_json()
         if (
             not body
-            or not isinstance(body.get("quiz_category", None), dict)
+            or not isinstance(body.get("quiz_category", None), int)
             or not isinstance(body.get("previous_questions", None), list)
         ):
             abort(400)
@@ -225,10 +227,10 @@ def create_app(test_config=None):
         previous_questions = body.get("previous_questions")
 
         questions = Question.query.filter(Question.id.not_in(previous_questions)).all()
-        if quiz_category:
-            if Category.query.filter(Category.id == quiz_category["id"]).count() < 1:
-                abort(404)
-            questions = [question for question in questions if question.category == quiz_category["id"]]
+        if quiz_category > 0:
+            if Category.query.filter(Category.id == quiz_category).count() < 1:
+                abort(400)
+            questions = [question for question in questions if question.category == quiz_category]
 
         question = None
         if len(questions) > 0:
@@ -255,6 +257,10 @@ def create_app(test_config=None):
     @app.errorhandler(415)
     def unsupported_media_type(error):
         return jsonify({"success": False, "error": "Unsupported Media Type"}), 415
+    
+    @app.errorhandler(422)
+    def unsupported_media_type(error):
+        return jsonify({"success": False, "error": "Unprocessable Content"}), 422
 
     @app.errorhandler(500)
     def internal_server_error(error):
