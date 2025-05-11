@@ -4,7 +4,7 @@ Final project for Course 3: API Development and Documentation in the Udacity Ful
 
 All of my code updates are in the `backend` directory and `backend/README.md` README. Please see the backened README for API documentation.
 
-Minor edits were made to the frontend code in `frontend`. Notably, `frontend/package.json`'s `serve` script was updated to run with the `node --openssl-legacy-provider` flag due to out-of-date dependencies in the starter project provided by Udacity. I'd love to fix the dependencies I just didn't have time. Don't ever do that in production - it's a shortcut.
+Minor edits were made to the frontend code in `frontend`. Notably, `frontend/package.json`'s `start` script was updated to run with the `node --openssl-legacy-provider` flag due to out-of-date dependencies in the starter project provided by Udacity. I'd love to fix the dependencies I just didn't have time. Don't ever do that in production - it's a shortcut.
 
 Below this line is the original README for the project, made by Udacity.
 ------------------------------------------------
